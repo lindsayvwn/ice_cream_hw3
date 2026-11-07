@@ -2,6 +2,7 @@ import json
 import pickle
 from datetime import date, datetime, timedelta
 
+import altair as alt
 import pandas as pd
 import requests
 import streamlit as st
@@ -135,13 +136,46 @@ with main_col:
             typical_version = features.copy()
             typical_version[column] = TYPICAL_DAY[column]
             effects[label] = prediction - model.predict(typical_version)[0]
-        chart_data = pd.DataFrame({"Cones added or removed": effects})
+        baseline = model.predict(pd.DataFrame([TYPICAL_DAY]))[0]
+        chart_data = pd.DataFrame({
+            "Predictor": [f"🌡️ Temperature ({show_temp(temperature)})",
+                          f"☀️ Daylight ({daylight_hours:.1f} h)",
+                          "📅 Weekend" if is_weekend else "📅 Weekday"],
+            "Effect": list(effects.values()),
+        })
+        chart_data["Direction"] = chart_data["Effect"].apply(lambda v: "Adds cones" if v >= 0 else "Removes cones")
+        chart_data["Label"] = chart_data["Effect"].apply(lambda v: f"{v:+.0f}")
+
         st.subheader("What is driving this prediction?")
-        st.bar_chart(chart_data)
-        st.caption(f"Each bar shows how many more (or fewer) cones that predictor adds compared with a typical "
-                   f"weekday ({show_temp(TYPICAL_DAY['temperature'])}, {TYPICAL_DAY['daylight_hours']} hours of daylight). "
-                   f"The bars are approximate, because the predictors also work together (for example, a weekend "
-                   f"helps more on a warm day).")
+        st.markdown(f"A typical weekday ({show_temp(TYPICAL_DAY['temperature'])}, "
+                    f"{TYPICAL_DAY['daylight_hours']} h of daylight) sells about **{baseline:.0f} cones**. "
+                    f"Here is what moves **{city} on {selected_date:%b %d}** to **{prediction:.0f}**:")
+
+        chart_data = chart_data.reindex(chart_data["Effect"].abs().sort_values(ascending=False).index)   # biggest first
+        low = min(0, chart_data["Effect"].min()) * 1.35
+        high = max(0, chart_data["Effect"].max()) * 1.35
+        low, high = (low, high) if high - low >= 20 else (low - 10, high + 10)
+        base = alt.Chart(chart_data).encode(
+            y=alt.Y("Predictor:N", sort=list(chart_data["Predictor"]), title=None, axis=alt.Axis(labelLimit=260, labelFontSize=14, labelColor="#333", ticks=False, domain=False, labelPadding=10)),
+        )
+        bars = base.mark_bar(cornerRadiusEnd=5, size=30).encode(
+            x=alt.X("Effect:Q", title="Cones added or removed", scale=alt.Scale(domain=[low, high], nice=False),
+                    axis=alt.Axis(grid=True, gridColor="#efefef", tickCount=5, domain=False, labelColor="#888", titleColor="#888", titleFontWeight="normal")),
+            color=alt.Color("Direction:N", legend=None,
+                            scale=alt.Scale(domain=["Adds cones", "Removes cones"], range=["#e07a5f", "#5b8db8"])),
+            tooltip=[alt.Tooltip("Predictor:N"), alt.Tooltip("Effect:Q", format="+.1f", title="Cones")],
+        )
+        # put each label just beyond the end of its bar (right of positive bars, left of negative ones)
+        label_pos = base.mark_text(align="left", dx=6, fontSize=15, fontWeight="bold", color="#333").encode(
+            x="Effect:Q", text="Label:N").transform_filter(alt.datum.Effect >= 0)
+        label_neg = base.mark_text(align="right", dx=-6, fontSize=15, fontWeight="bold", color="#333").encode(
+            x="Effect:Q", text="Label:N").transform_filter(alt.datum.Effect < 0)
+        zero = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#888", strokeWidth=1.5).encode(x="x:Q")
+        chart = (bars + label_pos + label_neg + zero).properties(height=190, width="container").configure_view(strokeWidth=0)
+        st.altair_chart(chart)
+        st.caption("Each bar is how many cones that predictor adds (orange) or removes (blue) compared with a "
+                   "typical weekday. The bars are approximate, because the predictors also work together "
+                   "(for example, a weekend helps more on a warm day).")
 
 # ======================= Right: about the model ===========================
 with side_col:
