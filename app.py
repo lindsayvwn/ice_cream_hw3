@@ -33,14 +33,14 @@ def hour_label(hour):
     return datetime(2000, 1, 1, hour).strftime("%I %p").lstrip("0")
 
 
-st.set_page_config(page_title="Ice Cream Sales Predictor", page_icon="🍦", layout="wide")
+st.set_page_config(page_title="Ice Cream Sales Predictor", page_icon="🍦")
 st.title("🍦 Ice Cream Sales Predictor")
 st.caption("Pick a city and a date and the app will predict how many cones you will sell.")
 
-main_col, side_col = st.columns([2, 1], gap="large")
+predict_tab, model_tab = st.tabs(["Predict", "Model information"])
 
-# ======================= Left: the app ====================================
-with main_col:
+# ======================= Tab 1: the app ===================================
+with predict_tab:
     # One compact panel for all the controls
     with st.container(border=True):
         city_col, date_col, unit_col = st.columns([3, 3, 2])
@@ -180,9 +180,9 @@ with main_col:
                    "typical weekday. The bars are approximate, because the predictors also work together "
                    "(for example, a weekend helps more on a warm day).")
 
-# ======================= Right: about the model ===========================
-with side_col:
-    with st.expander("About this model"):
+# ======================= Tab 2: model information =========================
+with model_tab:
+    with st.expander("About this model", expanded=True):
         st.markdown(
             f"#### What it is\n"
             f"A **{info['model_name']}** model, a type of machine learning. Instead of following rules a "
