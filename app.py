@@ -41,22 +41,25 @@ main_col, side_col = st.columns([2, 1], gap="large")
 
 # ======================= Left: the app ====================================
 with main_col:
-    unit = st.radio("Temperature unit", ["°F", "°C"], horizontal=True)
+    # One compact panel for all the controls
+    with st.container(border=True):
+        city_col, date_col, unit_col = st.columns([3, 3, 2])
+        city = city_col.selectbox("City", list(CITIES))
+        selected_date = date_col.date_input(
+            "Date",
+            value=date.today() + timedelta(days=1),
+            min_value=date.today(),
+            max_value=date.today() + timedelta(days=16),    # the forecast reaches about 16 days ahead
+        )
+        unit = unit_col.radio("Temperature unit", ["°F", "°C"], horizontal=True)
+        predict_clicked = st.button("Predict sales", type="primary")
 
     def show_temp(fahrenheit):
         """Convert a Fahrenheit value for display in the chosen unit."""
         value = fahrenheit if unit == "°F" else (fahrenheit - 32) * 5 / 9
         return f"{value:.0f} {unit}"
 
-    city = st.selectbox("City", list(CITIES))
-    selected_date = st.date_input(
-        "Date",
-        value=date.today() + timedelta(days=1),
-        min_value=date.today(),
-        max_value=date.today() + timedelta(days=16),    # the forecast reaches about 16 days ahead
-    )
-
-    if st.button("Predict sales", type="primary"):
+    if predict_clicked:
         # 1. Ask the weather API for the forecast (always in Fahrenheit: that is what the model learned)
         latitude, longitude = CITIES[city]
         response = requests.get(
