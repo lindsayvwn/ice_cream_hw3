@@ -37,6 +37,18 @@ st.set_page_config(page_title="Ice Cream Sales Predictor", page_icon="🍦")
 st.title("🍦 Ice Cream Sales Predictor")
 st.caption("Pick a city and a date and the app will predict how many cones you will sell.")
 
+# Make the tab labels bigger
+st.markdown(
+    """
+    <style>
+    [role="tablist"] { gap: 12px; }
+    [role="tab"] { height: 3.4rem; padding: 0 1.4rem; }
+    [role="tab"] p { font-size: 1.4rem; font-weight: 600; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 predict_tab, model_tab = st.tabs(["Predict", "Model information"])
 
 # ======================= Tab 1: the app ===================================
@@ -51,7 +63,7 @@ with predict_tab:
             min_value=date.today(),
             max_value=date.today() + timedelta(days=16),    # the forecast reaches about 16 days ahead
         )
-        unit = unit_col.radio("Temperature unit", ["°F", "°C"], horizontal=True)
+        unit = unit_col.segmented_control("Temperature unit", ["°F", "°C"], default="°F") or "°F"   # None if unselected
         predict_clicked = st.button("Predict sales", type="primary")
 
     def show_temp(fahrenheit):
