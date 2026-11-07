@@ -11,6 +11,7 @@ import streamlit as st
 CITIES = {
     "Pittsburgh": (40.44, -79.99),
     "New York": (40.71, -74.01),
+    "Boston": (42.36, -71.06),
     "Chicago": (41.88, -87.63),
     "Miami": (25.76, -80.19),
     "Los Angeles": (34.05, -118.24),
