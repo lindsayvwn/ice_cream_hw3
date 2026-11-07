@@ -154,17 +154,34 @@ with side_col:
             "predicted; it tells you when to be ready for them."
         )
 
-    st.metric("R² (on held-out test data)", f"{info['r2']:.3f}",
-              help="Share of the day-to-day variation in sales that the model explains. 1.0 is perfect, 0 is no better than the average.")
+    with st.expander("Model accuracy and coefficients"):
+        r2_pct = info["r2"] * 100
+        st.metric("R² (accuracy)", f"{info['r2']:.3f}",
+                  help="R² is the share of the day-to-day ups and downs in sales that the model explains. "
+                       "1.0 would be perfect; 0 would be no better than guessing the average every day.")
+        st.markdown(
+            f"**In plain terms:** the model explains about **{r2_pct:.0f}%** of the ups and downs in daily "
+            f"sales. The rest comes from things it can't see, like random variation from day to day. "
+            f"(Measured on days the model never saw during training.)"
+        )
 
-    temp_coef = info["coefficients"]["temperature"] * (1 if unit == "°F" else 9 / 5)
-    coef_table = pd.DataFrame({
-        "Predictor": [f"Temperature (per {unit})", "Daylight (per hour)", "Weekend (vs. weekday)"],
-        "Coefficient (cones)": [round(temp_coef, 2), info["coefficients"]["daylight_hours"],
-                                info["coefficients"]["is_weekend"]],
-    })
-    st.markdown("**Coefficients**")
-    st.dataframe(coef_table, hide_index=True)
-    st.caption(f"Intercept: {info['intercept']:.1f} cones. Each coefficient is how many more cones are "
-               f"sold when that predictor goes up by one unit, with the others held the same. "
-               f"Trained on {info['n_days']} simulated days.")
+        st.markdown("**What each predictor is worth**")
+        per_10 = info["coefficients"]["temperature"] * 10 * (1 if unit == "°F" else 9 / 5)
+        coefs = info["coefficients"]
+        st.markdown(
+            f"- 🌡️ **Temperature:** every **10 {unit}** warmer adds about **{per_10:.0f} cones**.\n"
+            f"- ☀️ **Daylight:** every extra **hour of daylight** adds about **{coefs['daylight_hours']:.0f} cones**.\n"
+            f"- 📅 **Weekend:** a Saturday or Sunday sells about **{coefs['is_weekend']:.0f} more cones** "
+            f"than a weekday."
+        )
+        st.caption("These are the model's coefficients. Each one is the effect of that predictor "
+                   "with the other two held the same.")
+
+        coef_table = pd.DataFrame({
+            "Predictor": [f"Temperature (per {unit})", "Daylight (per hour)", "Weekend (vs. weekday)"],
+            "Coefficient (cones)": [round(coefs["temperature"] * (1 if unit == "°F" else 9 / 5), 2),
+                                    coefs["daylight_hours"], coefs["is_weekend"]],
+        })
+        st.dataframe(coef_table, hide_index=True)
+        st.caption(f"Raw numbers. Intercept (the model's starting point before adding the predictors): "
+                   f"{info['intercept']:.1f}. Trained on {info['n_days']} simulated days.")
