@@ -8,11 +8,12 @@ business message.
 - `app.py`: the Streamlit app
 - `train.py`: simulates the data, trains the model and saves `model.pkl` (run `python train.py`)
 - `model.pkl`: the trained model (a multiple linear regression)
+- `model_info.json`: the model's R² and coefficients, shown in the app
 - `requirements.txt`: the packages Streamlit Cloud installs for you
 
 ## How it works
 1. The user picks a city and a date.
-2. The app asks Open-Meteo (free, no key, no sign-up) for the forecast high and the hours of daylight for that day, and works out whether the date is a weekend.
+2. The app asks Open-Meteo (free, no key, no sign-up) for the forecast high, the hourly temperatures (to find the warmest time of day) and the hours of daylight for that day, and works out whether the date is a weekend.
 3. The model predicts sales from temperature, daylight hours and weekend (0/1).
 4. The app shows the number, a bar chart of what drove it, a warning if the temperature is outside what the model learned
    from, and a short message.
@@ -27,7 +28,7 @@ of the predictors and a bar chart of how much each one moved the prediction. The
 into the made-up training data, so they are not real findings.
 
 ## Run it online for free (no terminal)
-1. Put these three files in a public GitHub repository (upload them in the browser).
+1. Put these files in a public GitHub repository (upload them in the browser).
 2. On share.streamlit.io, create an app from the repository, main file `app.py`.
 No API key is needed.
 

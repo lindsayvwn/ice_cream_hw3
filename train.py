@@ -2,8 +2,9 @@
 
 Predictors: temperature (F), daylight_hours, is_weekend (0/1).
 The data is simulated, to show the steps. Replace it with real sales data for a real business.
-Run:  python train.py   -> writes model.pkl
+Run:  python train.py   -> writes model.pkl and model_info.json
 """
+import json
 import pickle
 
 import numpy as np
@@ -32,7 +33,8 @@ data = pd.DataFrame({"temperature": temperature, "daylight_hours": daylight_hour
 X_train, X_test, y_train, y_test = train_test_split(data[FEATURES], data["sales"],
                                                     test_size=0.2, random_state=0)
 model = LinearRegression().fit(X_train, y_train)
-print("Test R^2:", round(r2_score(y_test, model.predict(X_test)), 3))
+r2 = r2_score(y_test, model.predict(X_test))
+print("Test R^2:", round(r2, 3))
 for name, coef in zip(FEATURES, model.coef_):
     print(f"  {name}: {coef:.2f}")
 print("  intercept:", round(model.intercept_, 2))
@@ -43,3 +45,10 @@ model = LinearRegression().fit(data[FEATURES], data["sales"])
 with open("model.pkl", "wb") as f:
     pickle.dump(model, f)
 print("Saved model.pkl")
+
+# Save the numbers the app displays (R^2 comes from the held-out test set above)
+with open("model_info.json", "w") as f:
+    json.dump({"r2": round(r2, 3), "n_days": n,
+               "coefficients": dict(zip(FEATURES, [round(c, 2) for c in model.coef_])),
+               "intercept": round(model.intercept_, 2)}, f, indent=2)
+print("Saved model_info.json")
