@@ -1,5 +1,6 @@
 import json
 import pickle
+import time
 from datetime import date, datetime, timedelta
 
 import altair as alt
@@ -27,6 +28,60 @@ with open("model.pkl", "rb") as f:
     model = pickle.load(f)
 with open("model_info.json") as f:
     info = json.load(f)
+
+
+class ForecastError(Exception):
+    """Raised when the weather service can't give us a usable forecast."""
+
+
+@st.cache_data(ttl=1800, show_spinner="Getting the forecast...")
+def fetch_forecast(latitude, longitude, day):
+    """Ask Open-Meteo for one day's forecast (always Fahrenheit: that is what the model learned).
+    Results are cached for 30 minutes so repeat requests don't hit the service again."""
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "daily": "temperature_2m_max,daylight_duration",
+        "hourly": "temperature_2m",
+        "temperature_unit": "fahrenheit",
+        "timezone": "auto",
+        "start_date": day,
+        "end_date": day,
+    }
+    response = None
+    for attempt in range(3):                       # retry if the service is busy or briefly down
+        try:
+            response = requests.get(URL, params=params, timeout=30)
+        except requests.RequestException:
+            response = None
+        else:
+            if response.status_code not in (429, 500, 502, 503, 504):
+                break
+        if attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
+    if response is None:
+        raise ForecastError("Could not reach the weather service. Please try again in a moment.")
+    if response.status_code == 429:
+        raise ForecastError("The weather service is busy right now (too many requests). "
+                            "Please wait a minute and try again.")
+    if not response.ok:
+        try:
+            reason = response.json().get("reason", "")
+        except ValueError:
+            reason = ""
+        raise ForecastError(f"The weather service could not give a forecast for that date "
+                            f"(error {response.status_code}). {reason}".strip())
+    data = response.json()
+    try:
+        temp = data["daily"]["temperature_2m_max"][0]
+        daylight = data["daily"]["daylight_duration"][0]
+        hourly_times, hourly_temps = data["hourly"]["time"], data["hourly"]["temperature_2m"]
+    except (KeyError, IndexError):
+        raise ForecastError("The weather service sent back an unexpected response. Please try again.")
+    if temp is None or daylight is None or any(t is None for t in hourly_temps):
+        raise ForecastError("The forecast for that date is not available yet. Try an earlier date.")
+    return {"temperature": temp, "daylight_seconds": daylight,
+            "hourly_times": hourly_times, "hourly_temps": hourly_temps}
 
 
 def hour_label(hour):
@@ -62,7 +117,7 @@ with predict_tab:
             "Date",
             value=date.today() + timedelta(days=1),
             min_value=date.today(),
-            max_value=date.today() + timedelta(days=16),    # the forecast reaches about 16 days ahead
+            max_value=date.today() + timedelta(days=15),    # the forecast covers today plus 15 more days
         )
         unit = unit_col.segmented_control("Temperature unit", ["°F", "°C"], default="°F") or "°F"   # None if unselected
         predict_clicked = st.button("Predict sales", type="primary")
@@ -73,35 +128,24 @@ with predict_tab:
         return f"{value:.0f} {unit}"
 
     if predict_clicked:
-        # 1. Ask the weather API for the forecast (always in Fahrenheit: that is what the model learned)
+        # 1. Ask the weather API for the forecast
         latitude, longitude = CITIES[city]
-        response = requests.get(
-            URL,
-            params={
-                "latitude": latitude,
-                "longitude": longitude,
-                "daily": "temperature_2m_max,daylight_duration",
-                "hourly": "temperature_2m",
-                "temperature_unit": "fahrenheit",
-                "timezone": "auto",
-                "start_date": str(selected_date),
-                "end_date": str(selected_date),
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
-        hourly_times = data["hourly"]["time"]            # local times like "2026-11-08T15:00"
-        hourly_temps = data["hourly"]["temperature_2m"]
-        peak_index = max(range(len(hourly_temps)), key=lambda i: hourly_temps[i])
+        try:
+            data = fetch_forecast(latitude, longitude, str(selected_date))
+        except ForecastError as error:
+            st.session_state.pop("result", None)
+            st.error(str(error))
+        else:
+            hourly_temps = data["hourly_temps"]
+            peak_index = max(range(len(hourly_temps)), key=lambda i: hourly_temps[i])
 
-        # Keep the result in session_state so it stays on screen when the unit is switched
-        st.session_state["result"] = {
-            "temperature": data["daily"]["temperature_2m_max"][0],
-            "daylight_hours": data["daily"]["daylight_duration"][0] / 3600,   # API gives seconds
-            "is_weekend": int(selected_date.weekday() >= 5),                  # Saturday = 5, Sunday = 6
-            "peak_hour": int(hourly_times[peak_index][11:13]),
-        }
+            # Keep the result in session_state so it stays on screen when the unit is switched
+            st.session_state["result"] = {
+                "temperature": data["temperature"],
+                "daylight_hours": data["daylight_seconds"] / 3600,            # API gives seconds
+                "is_weekend": int(selected_date.weekday() >= 5),              # Saturday = 5, Sunday = 6
+                "peak_hour": int(data["hourly_times"][peak_index][11:13]),    # local time, e.g. "2026-11-08T15:00"
+            }
 
     result = st.session_state.get("result")
     if result:
