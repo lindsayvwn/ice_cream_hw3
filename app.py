@@ -190,50 +190,50 @@ with predict_tab:
         chart = (bars + label_pos + label_neg + zero).properties(height=190, width="container").configure_view(strokeWidth=0)
         st.altair_chart(chart)
         st.caption("Each bar is how many cones that predictor adds (orange) or removes (blue) compared with a "
-                   "typical weekday. The bars are approximate, because the predictors also work together "
-                   "(for example, a weekend helps more on a warm day).")
+                   "typical weekday. Added together, the three bars take you from the typical weekday to this "
+                   "prediction.")
 
 # ======================= Tab 2: model information =========================
 with model_tab:
     with st.expander("About this model", expanded=True):
+        coefs = info["coefficients"]
         st.markdown(
             f"#### What it is\n"
-            f"A **{info['model_name']}** model, a type of machine learning. Instead of following rules a "
-            f"person wrote, it *learned* from examples: {info['n_days']:,} days, each with a temperature, "
-            "hours of daylight, whether it was a weekend, and how many cones were sold.\n\n"
-            "It builds many small decision trees, which are like flow charts of yes/no questions "
-            "(\"Is it above 80 °F? Is it a weekend?\"). Each new tree focuses on the days the earlier "
-            "trees got wrong, and the final prediction adds all the trees together.\n\n"
+            f"A **linear regression** model, one of the simplest and most widely used kinds of machine "
+            f"learning. Instead of following rules a person wrote, it *learned* from examples: "
+            f"{info['n_days']:,} days, each with a temperature, hours of daylight, whether it was a weekend, "
+            "and how many cones were sold.\n\n"
+            "It finds the best \"recipe\" for predicting sales by adding up weighted inputs:\n\n"
+            "> predicted cones = starting point + (a × temperature) + (b × hours of daylight) + (c × weekend)\n\n"
+            "Training means trying many values for a, b and c and keeping the ones that make the predictions "
+            "closest to the real sales (this is called least squares). Those learned numbers are the "
+            "**coefficients**, and you can see them in the next section.\n\n"
             "#### What it uses\n"
-            "- **Forecast high temperature:** hot days make people want ice cream. Sales climb quickly as it "
-            "warms up, level off once it is already hot, and dip in extreme heat.\n"
+            "- **Forecast high temperature:** hot days make people want ice cream.\n"
             "- **Hours of daylight:** longer days mean more time outdoors and more evening customers.\n"
-            "- **Weekend (Saturday or Sunday):** more people are out, especially on warm days.\n\n"
+            "- **Weekend (Saturday or Sunday):** more people are out, so foot traffic is higher.\n\n"
             "#### Why this model? The business case\n"
-            "We tried three kinds of model on days they had not seen: a straight-line model (linear "
-            "regression), a random forest and gradient boosting. Gradient boosting predicted best, "
-            f"missing by about **{info['comparison']['Gradient boosting']['test_mae']:.0f} cones** on a typical day, "
-            f"against about **{info['comparison']['Linear regression']['test_mae']:.0f}** for the straight-line model.\n\n"
-            "- **Accuracy is where the money is.** The prediction drives how much to stock and how many "
-            "people to schedule. A smaller miss means less waste on slow days and fewer sell-outs on busy ones.\n"
-            "- **It fits how sales really behave.** Sales do not rise in a straight line with heat. A "
-            "straight-line model gets the hottest, busiest days wrong, and those are the days where mistakes "
-            "cost the most.\n"
-            "- **It is cheap to run.** The model is small and predicts instantly.\n\n"
-            "**The trade-offs:** a straight-line model is easier to explain in one sentence (\"every 10 °F "
-            "adds a fixed number of cones\"), it is safer with only a few weeks of data, and it keeps trending outside "
-            "the temperatures it has seen. This model is harder to explain in one line, so the app shows "
-            "what drove each prediction and which predictors matter most instead. It also goes flat "
-            f"outside {show_temp(LOW_TEMP)} to {show_temp(HIGH_TEMP)}, so the app warns you there.\n\n"
+            "- **You can explain it.** Every predictor has one number you can read and check against your "
+            "own sense of the business (\"every 10 °F warmer adds about "
+            f"{coefs['temperature'] * 10:.0f} cones\"). That makes it easy to trust and easy to defend.\n"
+            "- **It is safe with limited data.** A simple model is less likely to chase noise when you only "
+            "have a few weeks of sales.\n"
+            "- **It is cheap to run.** It predicts instantly, and it keeps trending sensibly even outside the "
+            "temperatures it has seen.\n\n"
+            "**The trade-off:** it assumes each predictor adds a fixed amount of cones, a straight-line "
+            "effect. Real sales curve: they climb fast as it warms up, level off when it is already hot, and "
+            "the weekend boost is bigger on warm days. So it can miss on the hottest and coldest days. "
+            "More flexible models can fit those curves, but they are harder to explain.\n\n"
             "#### Limits\n"
             "It was trained on made-up data to show the steps, so treat the numbers as an illustration. "
             "A real business would retrain it on its own sales records as they come in. It can only use "
-            "what it was given, and it does not know about events, promotions or holidays.\n\n"
+            "what it was given, and it does not know about events, promotions or holidays. It was trained on "
+            f"{show_temp(LOW_TEMP)} to {show_temp(HIGH_TEMP)}, so the app warns you outside that range.\n\n"
             "The *warmest time of day* comes from the hourly forecast. It does not change the number of "
             "cones predicted; it tells you when to be ready for them."
         )
 
-    with st.expander("Model accuracy and what matters"):
+    with st.expander("Model accuracy and coefficients"):
         st.metric("R² (accuracy)", f"{info['r2']:.3f}",
                   help="R² is the share of the day-to-day ups and downs in sales that the model explains. "
                        "1.0 would be perfect; 0 would be no better than guessing the average every day.")
@@ -243,34 +243,22 @@ with model_tab:
             f"(Measured on days the model never saw during training.)"
         )
 
-        st.markdown("**How the models compared**")
-        comparison = pd.DataFrame([
-            {"Model": ("⭐ " if name == info["model_name"] else "") + name,
-             "Accuracy (R²)": r["test_r2"], "Typical miss (cones)": r["test_mae"]}
-            for name, r in info["comparison"].items()
-        ])
-        st.dataframe(comparison, hide_index=True)
-
-        st.markdown("**How much each predictor matters**")
-        imp = info["importance"]
+        st.markdown("**What each predictor is worth**")
+        per_10 = coefs["temperature"] * 10 * (1 if unit == "°F" else 9 / 5)
         st.markdown(
-            f"- 🌡️ **Temperature:** {imp['temperature'] * 100:.1f}%\n"
-            f"- 📅 **Weekend:** {imp['is_weekend'] * 100:.1f}%\n"
-            f"- ☀️ **Daylight:** {imp['daylight_hours'] * 100:.1f}%"
+            f"- 🌡️ **Temperature:** every **10 {unit}** warmer adds about **{per_10:.0f} cones**.\n"
+            f"- ☀️ **Daylight:** every extra **hour of daylight** adds about **{coefs['daylight_hours']:.0f} cones**.\n"
+            f"- 📅 **Weekend:** a Saturday or Sunday sells about **{coefs['is_weekend']:.0f} more cones** "
+            f"than a weekday."
         )
-        st.caption("Each percentage is that predictor's share of the model's predictive power, measured by how "
-                   "much accuracy drops when its values are scrambled. In this made-up data, temperature is "
-                   "by far the biggest driver.")
+        st.caption("These are the model's coefficients. Each one is the effect of that predictor "
+                   "with the other two held the same.")
 
-        st.markdown("**How temperature affects sales (according to the model)**")
-        grid_f = list(range(50, 101, 2))
-        curve = pd.DataFrame({"temperature": grid_f, "daylight_hours": 12.0})
-        shown = [round(t if unit == "°F" else (t - 32) * 5 / 9, 1) for t in grid_f]
-        curve_data = pd.DataFrame({
-            "Weekday": model.predict(curve.assign(is_weekend=0)),
-            "Weekend": model.predict(curve.assign(is_weekend=1)),
-        }, index=pd.Index(shown, name=f"Forecast high ({unit})"))
-        st.line_chart(curve_data, y_label="Predicted cones")
-        st.caption("Notice the curve is not a straight line: sales climb quickly through the 60s and 70s, "
-                   "flatten when it is hot, and the weekend boost grows on warm days. (Shown for a day with 12 "
-                   "hours of daylight.)")
+        coef_table = pd.DataFrame({
+            "Predictor": [f"Temperature (per {unit})", "Daylight (per hour)", "Weekend (vs. weekday)"],
+            "Coefficient (cones)": [round(coefs["temperature"] * (1 if unit == "°F" else 9 / 5), 2),
+                                    coefs["daylight_hours"], coefs["is_weekend"]],
+        })
+        st.dataframe(coef_table, hide_index=True)
+        st.caption(f"Raw numbers. Intercept (the model's starting point before adding the predictors): "
+                   f"{info['intercept']:.1f}. Trained on {info['n_days']:,} simulated days.")

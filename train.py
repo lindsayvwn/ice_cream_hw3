@@ -1,9 +1,7 @@
-"""Train the ice cream sales model (version 3).
+"""Train the ice cream sales model.
 
-Predictors: temperature (F), daylight_hours, is_weekend (0/1).
+A linear regression on three predictors: temperature (F), daylight_hours, is_weekend (0/1).
 The data is simulated, to show the steps. Replace it with real sales data for a real business.
-
-Several kinds of model compete on days they have never seen, and the best one is saved.
 Run:  python train.py   -> writes model.pkl and model_info.json
 """
 import json
@@ -11,11 +9,9 @@ import pickle
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import train_test_split
 
 # app.py must build its input with exactly these columns, in this order
 FEATURES = ["temperature", "daylight_hours", "is_weekend"]
@@ -46,42 +42,24 @@ data = pd.DataFrame({"temperature": temperature, "daylight_hours": daylight_hour
 X, y = data[FEATURES], data["sales"]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
 
-# ---- 2. Let several models compete ---------------------------------------
-candidates = {
-    "Linear regression": LinearRegression(),
-    "Random forest": RandomForestRegressor(n_estimators=200, min_samples_leaf=5, random_state=0),
-    "Gradient boosting": GradientBoostingRegressor(n_estimators=150, max_depth=3, learning_rate=0.05,
-                                                   subsample=0.8, random_state=0),
-}
-results = {}
-for name, candidate in candidates.items():
-    cv_r2 = cross_val_score(candidate, X_train, y_train, cv=5, scoring="r2").mean()
-    candidate.fit(X_train, y_train)
-    pred = candidate.predict(X_test)
-    results[name] = {"cv_r2": round(cv_r2, 3), "test_r2": round(r2_score(y_test, pred), 3),
-                     "test_mae": round(mean_absolute_error(y_test, pred), 1)}
-    print(f"{name:18s} CV R2 {cv_r2:.3f} | test R2 {results[name]['test_r2']:.3f} | "
-          f"typical miss {results[name]['test_mae']:.1f} cones")
+# ---- 2. Fit the model and check it on days it has not seen ----------------
+model = LinearRegression().fit(X_train, y_train)
+pred = model.predict(X_test)
+r2 = r2_score(y_test, pred)
+mae = mean_absolute_error(y_test, pred)
+print(f"Test R2 {r2:.3f} | typical miss {mae:.1f} cones")
+for name, coef in zip(FEATURES, model.coef_):
+    print(f"  {name}: {coef:.2f}")
+print("  intercept:", round(model.intercept_, 2))
 
-# Pick the winner using cross-validation on the training days only (the test days stay untouched)
-best_name = max(results, key=lambda k: results[k]["cv_r2"])
-print("Best model:", best_name)
-
-# ---- 3. How much does each predictor matter? ------------------------------
-best = candidates[best_name]
-imp = permutation_importance(best, X_test, y_test, n_repeats=20, random_state=0, scoring="r2")
-share = np.clip(imp.importances_mean, 0, None)
-share = share / share.sum()
-importance = {f: round(float(s), 3) for f, s in zip(FEATURES, share)}
-print("Importance:", importance)
-
-# ---- 4. Refit the winner on all the data and save it ----------------------
-final_model = type(best)(**best.get_params()).fit(X, y)
+# ---- 3. Refit on all the data and save it ---------------------------------
+final_model = LinearRegression().fit(X, y)
 with open("model.pkl", "wb") as f:
     pickle.dump(final_model, f)
 
 with open("model_info.json", "w") as f:
-    json.dump({"model_name": best_name, "r2": results[best_name]["test_r2"],
-               "typical_miss": results[best_name]["test_mae"], "n_days": n,
-               "comparison": results, "importance": importance}, f, indent=2)
+    json.dump({"model_name": "Linear regression", "r2": round(r2, 3), "typical_miss": round(mae, 1),
+               "n_days": n,
+               "coefficients": dict(zip(FEATURES, [round(float(c), 2) for c in final_model.coef_])),
+               "intercept": round(float(final_model.intercept_), 2)}, f, indent=2)
 print("Saved model.pkl and model_info.json")

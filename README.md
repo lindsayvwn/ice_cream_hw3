@@ -1,4 +1,4 @@
-# Ice Cream Sales Predictor (version 3: gradient boosting model)
+# Ice Cream Sales Predictor (linear regression: temperature, daylight, weekend)
 
 Pick a city and a date. The app asks a free weather API for the forecast high, gives that
 temperature to a trained model, and shows the predicted number of cones sold, with a short
@@ -7,8 +7,8 @@ business message.
 ## Files
 - `app.py`: the Streamlit app
 - `train.py`: simulates the data, trains the model and saves `model.pkl` (run `python train.py`)
-- `model.pkl`: the trained model (gradient boosting, chosen because it beat linear regression and random forest on unseen days)
-- `model_info.json`: the model's accuracy, model comparison and predictor importance, shown in the app
+- `model.pkl`: the trained model (a multiple linear regression)
+- `model_info.json`: the model's R², typical miss and coefficients, shown in the app
 - `requirements.txt`: the packages Streamlit Cloud installs for you
 
 ## How it works
@@ -21,15 +21,15 @@ business message.
 The model was trained on made-up data, to show the steps. Replace it with a model trained on
 real data to use this for a real business.
 
-## What changed in version 3
-- The training data is more realistic: sales rise in an S-curve with temperature, dip in extreme
-  heat, and the weekend boost is bigger on warm days.
-- `train.py` now trains three models (linear regression, random forest, gradient boosting), compares
-  them on days they have not seen, and saves the best one. Gradient boosting won (R² about 0.98,
-  typical miss about 12 cones, versus 0.94 and 21 for the straight-line model).
-- The app explains the model in the "About this model" box, and shows accuracy, the model
-  comparison, predictor importance and a temperature curve in "Model accuracy and what matters".
-- The data is still simulated, so these effects are built in and are not real findings.
+## What changed since version 1
+- Added two predictors to temperature: **daylight_hours** and **is_weekend**.
+- `train.py` trains a linear regression on simulated data (sales rise in an S-curve with temperature,
+  dip in extreme heat, and the weekend boost is bigger on warm days) and saves the model and its numbers.
+- The app has two tabs. **Predict** has the controls, the prediction, a note on the warmest time of day
+  and a chart of what is driving the prediction. **Model information** explains the model and shows its
+  R² and coefficients, with a °F/°C toggle.
+- The data is simulated, so these effects are built in and are not real findings. A straight line is a
+  simple fit to curved data, so the model can miss on the hottest and coldest days.
 
 ## Run it online for free (no terminal)
 1. Put these files in a public GitHub repository (upload them in the browser).

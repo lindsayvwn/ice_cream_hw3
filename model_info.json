@@ -1,28 +1,12 @@
 {
-  "model_name": "Gradient boosting",
-  "r2": 0.978,
-  "typical_miss": 12.1,
+  "model_name": "Linear regression",
+  "r2": 0.938,
+  "typical_miss": 21.1,
   "n_days": 1500,
-  "comparison": {
-    "Linear regression": {
-      "cv_r2": 0.927,
-      "test_r2": 0.938,
-      "test_mae": 21.1
-    },
-    "Random forest": {
-      "cv_r2": 0.973,
-      "test_r2": 0.976,
-      "test_mae": 12.7
-    },
-    "Gradient boosting": {
-      "cv_r2": 0.974,
-      "test_r2": 0.978,
-      "test_mae": 12.1
-    }
+  "coefficients": {
+    "temperature": 4.7,
+    "daylight_hours": 12.29,
+    "is_weekend": 27.59
   },
-  "importance": {
-    "temperature": 0.976,
-    "daylight_hours": 0.008,
-    "is_weekend": 0.016
-  }
+  "intercept": -307.21
 }
